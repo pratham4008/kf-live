@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kalman pairs, live on paper</title>
+<!-- Embed: copy the <link> tags, the <style> block, the <section id="kf-live"> and the <script> block
+     into your portfolio page, then set API_BASE in the script. Open this file with ?demo to preview. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+#kf-live {
+  --paper: #E8EEF4;
+  --grid: #CFDAE5;
+  --ink: #1C2E4A;
+  --muted: #5B6C84;
+  --ochre: #B8862B;
+  --teal: #2A7B78;
+  --loss: #9C3D34;
+  --line: #9FB1C6;
+  font-family: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border: 1.5px solid var(--ink);
+  padding: clamp(16px, 3vw, 32px);
+  max-width: 1040px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+#kf-live *, #kf-live *::before, #kf-live *::after { box-sizing: inherit; }
+#kf-live h2 {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-weight: 600; font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+  line-height: 1.05; margin: 0; letter-spacing: 0.01em;
+}
+#kf-live .kfl-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+#kf-live .kfl-lede { margin: 6px 0 0; color: var(--muted); max-width: 62ch; font-size: 0.97rem; }
+#kf-live .kfl-status { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: var(--muted); white-space: nowrap; }
+#kf-live .kfl-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
+#kf-live .kfl-dot.is-live { background: var(--teal); box-shadow: 0 0 0 3px rgba(42,123,120,.18); }
+#kf-live .kfl-dot.is-error { background: var(--loss); }
+#kf-live .kfl-banner {
+  margin: 16px 0 0; padding: 8px 12px; border: 1px dashed var(--ochre);
+  background: rgba(184,134,43,.08); font-size: 0.9rem;
+}
+#kf-live .kfl-banner[hidden] { display: none; }
+
+#kf-live .kfl-sheet { margin-top: 20px; background: rgba(232,238,244,.86); border: 1px solid var(--ink); }
+#kf-live .kfl-chart { padding: 12px 8px 4px 4px; border-bottom: 1px solid var(--ink); }
+#kf-live .kfl-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+#kf-live .kfl-legend { display: flex; gap: 4px 18px; padding: 0 12px 8px; font-size: 0.85rem; color: var(--muted); flex-wrap: wrap; }
+#kf-live .kfl-key { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--ink); vertical-align: middle; margin-right: 6px; }
+#kf-live .kfl-key.bench { border-top: 2px dashed var(--teal); }
+#kf-live .kfl-key.dim { border-top: 1.5px solid var(--ochre); }
+
+#kf-live .kfl-figures { display: grid; grid-template-columns: repeat(6, 1fr); border-bottom: 1px solid var(--ink); }
+#kf-live .kfl-fig { padding: 10px 12px 12px; border-right: 1px solid var(--line); min-width: 0; }
+#kf-live .kfl-fig:last-child { border-right: 0; }
+#kf-live .kfl-fig dt { font-size: 0.8rem; color: var(--muted); }
+#kf-live .kfl-fig dd { margin: 2px 0 0; font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 500; font-size: 1.45rem; line-height: 1.1; }
+#kf-live .kfl-fig small { display: block; font-size: 0.75rem; color: var(--muted); font-family: "Barlow", sans-serif; }
+#kf-live .pos { color: var(--teal); }
+#kf-live .neg { color: var(--loss); }
+
+#kf-live .kfl-lower { display: grid; grid-template-columns: 1fr 1.25fr; }
+#kf-live .kfl-panel { padding: 14px 14px 16px; min-width: 0; }
+#kf-live .kfl-panel + .kfl-panel { border-left: 1px solid var(--ink); }
+#kf-live h3 { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 600; font-size: 1.15rem; margin: 0 0 8px; }
+#kf-live .kfl-pos { font-size: 0.95rem; margin: 10px 0 0; }
+#kf-live .kfl-pos strong { font-weight: 600; }
+#kf-live .kfl-note { font-size: 0.82rem; color: var(--muted); margin: 6px 0 0; }
+#kf-live .kfl-tablewrap { overflow-x: auto; }
+#kf-live table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+#kf-live th { text-align: left; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--ink); padding: 4px 8px 4px 0; }
+#kf-live td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+#kf-live td.num, #kf-live th.num { text-align: right; }
+#kf-live .kfl-empty { color: var(--muted); font-size: 0.9rem; }
+
+#kf-live .kfl-foot { display: grid; grid-template-columns: 1fr auto; border-top: 1px solid var(--ink); }
+#kf-live .kfl-disclaimer { padding: 12px 14px; font-size: 0.8rem; color: var(--muted); max-width: 70ch; margin: 0; }
+#kf-live .kfl-titleblock { border-left: 1px solid var(--ink); display: grid; grid-template-columns: auto auto; font-size: 0.8rem; min-width: 300px; margin: 0; }
+#kf-live .kfl-titleblock dt, #kf-live .kfl-titleblock dd { margin: 0; padding: 4px 10px; border-bottom: 1px solid var(--line); }
+#kf-live .kfl-titleblock dt { color: var(--muted); border-right: 1px solid var(--line); }
+#kf-live .kfl-titleblock dd { font-weight: 500; }
+#kf-live .kfl-titleblock dt:nth-last-of-type(1), #kf-live .kfl-titleblock dd:last-of-type { border-bottom: 0; }
+
+@media (max-width: 820px) {
+  #kf-live .kfl-figures { grid-template-columns: repeat(3, 1fr); }
+  #kf-live .kfl-fig:nth-child(3) { border-right: 0; }
+  #kf-live .kfl-fig:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+  #kf-live .kfl-lower, #kf-live .kfl-foot { grid-template-columns: 1fr; }
+  #kf-live .kfl-panel + .kfl-panel, #kf-live .kfl-titleblock { border-left: 0; border-top: 1px solid var(--ink); }
+  #kf-live .kfl-titleblock { min-width: 0; }
+}
+@media (max-width: 480px) {
+  #kf-live .kfl-figures { grid-template-columns: repeat(2, 1fr); }
+  #kf-live .kfl-fig { border-right: 1px solid var(--line) !important; border-bottom: 1px solid var(--line); }
+  #kf-live .kfl-fig:nth-child(2n) { border-right: 0 !important; }
+}
+</style>
+</head>
+<body style="margin:0;padding:24px;background:#DCE4EC;">
+
+<section id="kf-live" aria-labelledby="kfl-title">
+  <div class="kfl-head">
+    <div>
+      <h2 id="kfl-title">Kalman pairs, live on paper</h2>
+      <p class="kfl-lede" id="kfl-lede">A Kalman filter re-estimates the hedge ratio between two assets every trading day. When their spread moves unusually far from its recent average, the strategy bets on it reverting.</p>
+    </div>
+    <div class="kfl-status" role="status" aria-live="polite"><span class="kfl-dot" id="kfl-dot"></span><span id="kfl-status">Connecting to the trading service</span></div>
+  </div>
+  <p class="kfl-banner" id="kfl-banner" hidden></p>
+
+  <div class="kfl-sheet">
+    <div class="kfl-chart">
+      <svg id="kfl-svg" viewBox="0 0 800 300" role="img" aria-label="Equity curve"></svg>
+      <div class="kfl-legend" aria-hidden="true">
+        <span><span class="kfl-key"></span>Strategy equity</span>
+        <span><span class="kfl-key bench"></span><span id="kfl-bench-label">Benchmark</span>, same starting capital</span>
+        <span><span class="kfl-key dim"></span>Change since start</span>
+      </div>
+    </div>
+
+    <dl class="kfl-figures">
+      <div class="kfl-fig"><dt>Equity</dt><dd id="f-equity">–</dd></div>
+      <div class="kfl-fig"><dt>Return</dt><dd id="f-return">–</dd></div>
+      <div class="kfl-fig"><dt id="f-bench-label">Benchmark</dt><dd id="f-bench">–</dd></div>
+      <div class="kfl-fig"><dt>Versus benchmark</dt><dd id="f-excess">–</dd></div>
+      <div class="kfl-fig"><dt>Worst drawdown</dt><dd id="f-dd">–</dd></div>
+      <div class="kfl-fig"><dt>Sharpe ratio</dt><dd id="f-sharpe">–</dd></div>
+    </dl>
+
+    <div class="kfl-lower">
+      <div class="kfl-panel">
+        <h3>Today's signal</h3>
+        <svg id="kfl-gauge" viewBox="0 0 360 84" role="img" aria-label="Spread z-score"></svg>
+        <p class="kfl-pos" id="kfl-pos"></p>
+        <p class="kfl-note" id="kfl-signal-note"></p>
+      </div>
+      <div class="kfl-panel">
+        <h3>Recent orders</h3>
+        <div class="kfl-tablewrap" id="kfl-trades"><p class="kfl-empty">No orders yet.</p></div>
+      </div>
+    </div>
+
+    <div class="kfl-foot">
+      <p class="kfl-disclaimer">Paper trading on Alpaca: real market prices, simulated capital and fills. Results start on the date shown and include no backtest data. They exclude borrow fees and real-world slippage, and a short live record says little about future performance.</p>
+      <dl class="kfl-titleblock" id="kfl-titleblock"></dl>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  // Set this to your deployed backend, e.g. "https://kf-live.fly.dev"
+  const API_BASE = "https://YOUR-BACKEND-URL";
+  const POLL_MS = 60000;
+  const DEMO = new URLSearchParams(location.search).has("demo");
+  const SAMPLE = {"mode":"simulation","strategy":{"name":"Kalman-filtered pairs","y":"EWA","x":"EWC","benchmark":"SPY","entry_z":2.0,"exit_z":0.5,"stop_z":4.0,"zscore_window":60,"rebalance_hedge":true,"gross_exposure":1.0,"anchor_start":"2016-01-04"},"inception":{"ts":"2026-10-10T17:58:30+00:00","equity":100000.0,"bench_price":341.40976433821135},"updated_at":"2026-10-10T17:58:33+00:00","market_open":true,"metrics":{"equity":109780.36678982736,"total_return":0.09780366789827366,"benchmark_return":0.37666498017652694,"excess_return":-0.2788613122782533,"max_drawdown":-0.02781154427797705,"sharpe":1.5741467768757422,"sharpe_note":null,"days_live":250,"n_trades":95},"equity_curve":[{"day":"2026-10-29","equity":100000.0,"benchmark":100000.0},{"day":"2026-10-30","equity":100000.0,"benchmark":100625.29},{"day":"2026-10-31","equity":100000.0,"benchmark":101005.95},{"day":"2026-11-01","equity":100000.0,"benchmark":101756.93},{"day":"2026-11-02","equity":100000.0,"benchmark":101811.74},{"day":"2026-11-03","equity":100000.0,"benchmark":102901.35},{"day":"2026-11-04","equity":100000.0,"benchmark":103438.52},{"day":"2026-11-05","equity":100000.0,"benchmark":101616.91},{"day":"2026-11-06","equity":100000.0,"benchmark":101828.15},{"day":"2026-11-07","equity":100000.0,"benchmark":102627.82},{"day":"2026-11-08","equity":100000.0,"benchmark":102675.47},{"day":"2026-11-09","equity":100000.0,"benchmark":104196.92},{"day":"2026-11-10","equity":100000.0,"benchmark":103734.06},{"day":"2026-11-11","equity":100000.0,"benchmark":104471.62},{"day":"2026-11-12","equity":100000.0,"benchmark":103206.47},{"day":"2026-11-13","equity":100000.0,"benchmark":103217.8},{"day":"2026-11-14","equity":100000.0,"benchmark":102663.83},{"day":"2026-11-15","equity":100000.0,"benchmark":101653.03},{"day":"2026-11-16","equity":100000.0,"benchmark":100345.1},{"day":"2026-11-17","equity":100000.0,"benchmark":100581.45},{"day":"2026-11-18","equity":100000.0,"benchmark":101024.88},{"day":"2026-11-19","equity":100000.0,"benchmark":100397.68},{"day":"2026-11-20","equity":100000.0,"benchmark":99175.06},{"day":"2026-11-21","equity":100000.0,"benchmark":98321.25},{"day":"2026-11-22","equity":100000.0,"benchmark":99083.65},{"day":"2026-11-23","equity":100000.0,"benchmark":97911.4},{"day":"2026-11-24","equity":99967.63,"benchmark":99044.39},{"day":"2026-11-25","equity":100278.6,"benchmark":97417.19},{"day":"2026-11-26","equity":100278.6,"benchmark":97702.21},{"day":"2026-11-27","equity":100278.6,"benchmark":98368.52},{"day":"2026-11-28","equity":100278.6,"benchmark":99590.49},{"day":"2026-11-29","equity":100278.6,"benchmark":99177.67},{"day":"2026-11-30","equity":100278.6,"benchmark":98435.74},{"day":"2026-12-01","equity":100278.6,"benchmark":97058.86},{"day":"2026-12-02","equity":100278.6,"benchmark":97959.57},{"day":"2026-12-03","equity":100278.6,"benchmark":97847.65},{"day":"2026-12-04","equity":100278.6,"benchmark":97413.72},{"day":"2026-12-05","equity":100278.6,"benchmark":97020.73},{"day":"2026-12-06","equity":100278.6,"benchmark":97281.78},{"day":"2026-12-07","equity":100278.6,"benchmark":97328.4},{"day":"2026-12-08","equity":100278.6,"benchmark":98498.69},{"day":"2026-12-09","equity":99088.59,"benchmark":96417.45},{"day":"2026-12-10","equity":98310.7,"benchmark":97250.91},{"day":"2026-12-11","equity":99105.63,"benchmark":96750.38},{"day":"2026-12-12","equity":99105.63,"benchmark":96690.86},{"day":"2026-12-13","equity":99105.63,"benchmark":96403.78},{"day":"2026-12-14","equity":99105.63,"benchmark":96338.43},{"day":"2026-12-15","equity":99105.63,"benchmark":97085.95},{"day":"2026-12-16","equity":99105.63,"benchmark":97318.71},{"day":"2026-12-17","equity":99105.63,"benchmark":95942.7},{"day":"2026-12-18","equity":99105.63,"benchmark":95896.14},{"day":"2026-12-19","equity":99105.63,"benchmark":95820.61},{"day":"2026-12-20","equity":99105.63,"benchmark":96195.56},{"day":"2026-12-21","equity":99105.63,"benchmark":96253.76},{"day":"2026-12-22","equity":99105.63,"benchmark":96195.63},{"day":"2026-12-23","equity":99105.63,"benchmark":97206.92},{"day":"2026-12-24","equity":99105.63,"benchmark":96174.3},{"day":"2026-12-25","equity":99105.63,"benchmark":98314.13},{"day":"2026-12-26","equity":99105.63,"benchmark":97782.2},{"day":"2026-12-27","equity":99105.63,"benchmark":96795.72},{"day":"2026-12-28","equity":99105.63,"benchmark":97578.51},{"day":"2026-12-29","equity":98038.23,"benchmark":98654.69},{"day":"2026-12-30","equity":98181.55,"benchmark":99919.12},{"day":"2026-12-31","equity":99054.48,"benchmark":101410.85},{"day":"2027-01-01","equity":98650.46,"benchmark":101920.16},{"day":"2027-01-02","equity":98650.46,"benchmark":102010.15},{"day":"2027-01-03","equity":98650.46,"benchmark":102420.33},{"day":"2027-01-04","equity":98650.46,"benchmark":102442.25},{"day":"2027-01-05","equity":98650.46,"benchmark":101913.49},{"day":"2027-01-06","equity":98650.46,"benchmark":103588.3},{"day":"2027-01-07","equity":98650.46,"benchmark":105515.14},{"day":"2027-01-08","equity":98650.46,"benchmark":105551.45},{"day":"2027-01-09","equity":98650.46,"benchmark":105337.26},{"day":"2027-01-10","equity":98650.46,"benchmark":104849.63},{"day":"2027-01-11","equity":98650.46,"benchmark":103127.65},{"day":"2027-01-12","equity":98650.46,"benchmark":102459.35},{"day":"2027-01-13","equity":98650.46,"benchmark":101960.1},{"day":"2027-01-14","equity":98650.46,"benchmark":101968.7},{"day":"2027-01-15","equity":98650.46,"benchmark":100981.68},{"day":"2027-01-16","equity":98650.46,"benchmark":99107.55},{"day":"2027-01-17","equity":98650.46,"benchmark":99785.87},{"day":"2027-01-18","equity":98650.46,"benchmark":101548.97},{"day":"2027-01-19","equity":98650.46,"benchmark":99439.44},{"day":"2027-01-20","equity":98650.46,"benchmark":99332.93},{"day":"2027-01-21","equity":98650.46,"benchmark":100217.38},{"day":"2027-01-22","equity":98650.46,"benchmark":99085.53},{"day":"2027-01-23","equity":98650.46,"benchmark":97702.79},{"day":"2027-01-24","equity":98650.46,"benchmark":97766.31},{"day":"2027-01-25","equity":98650.46,"benchmark":97569.34},{"day":"2027-01-26","equity":98650.46,"benchmark":96980.78},{"day":"2027-01-27","equity":98650.46,"benchmark":98619.75},{"day":"2027-01-28","equity":98650.46,"benchmark":100141.94},{"day":"2027-01-29","equity":98650.46,"benchmark":100834.78},{"day":"2027-01-30","equity":98650.46,"benchmark":100802.93},{"day":"2027-01-31","equity":98650.46,"benchmark":100511.33},{"day":"2027-02-01","equity":98650.46,"benchmark":101442.35},{"day":"2027-02-02","equity":98650.46,"benchmark":101244.32},{"day":"2027-02-03","equity":98650.46,"benchmark":102804.13},{"day":"2027-02-04","equity":98650.46,"benchmark":104138.05},{"day":"2027-02-05","equity":98650.46,"benchmark":103555.14},{"day":"2027-02-06","equity":98650.46,"benchmark":104392.82},{"day":"2027-02-07","equity":98650.46,"benchmark":106091.24},{"day":"2027-02-08","equity":98650.46,"benchmark":106839.95},{"day":"2027-02-09","equity":98650.46,"benchmark":105886.94},{"day":"2027-02-10","equity":98650.46,"benchmark":105657.7},{"day":"2027-02-11","equity":98650.46,"benchmark":105354.62},{"day":"2027-02-12","equity":98650.46,"benchmark":105539.74},{"day":"2027-02-13","equity":98650.46,"benchmark":105632.17},{"day":"2027-02-14","equity":98650.46,"benchmark":105321.27},{"day":"2027-02-15","equity":98650.46,"benchmark":106292.51},{"day":"2027-02-16","equity":98650.46,"benchmark":107807.2},{"day":"2027-02-17","equity":98650.46,"benchmark":107268.93},{"day":"2027-02-18","equity":98650.46,"benchmark":105766.47},{"day":"2027-02-19","equity":98650.46,"benchmark":106231.17},{"day":"2027-02-20","equity":98650.46,"benchmark":106310.2},{"day":"2027-02-21","equity":98650.46,"benchmark":106834.68},{"day":"2027-02-22","equity":98650.46,"benchmark":106183.25},{"day":"2027-02-23","equity":98650.46,"benchmark":106572.01},{"day":"2027-02-24","equity":98650.46,"benchmark":105685.82},{"day":"2027-02-25","equity":98650.46,"benchmark":106926.97},{"day":"2027-02-26","equity":98650.46,"benchmark":108825.99},{"day":"2027-02-27","equity":98650.46,"benchmark":107905.18},{"day":"2027-02-28","equity":98650.46,"benchmark":105224.46},{"day":"2027-03-01","equity":98260.63,"benchmark":104798.61},{"day":"2027-03-02","equity":97563.97,"benchmark":104337.25},{"day":"2027-03-03","equity":99752.06,"benchmark":104632.77},{"day":"2027-03-04","equity":101248.16,"benchmark":104746.87},{"day":"2027-03-05","equity":100286.13,"benchmark":105360.77},{"day":"2027-03-06","equity":100286.13,"benchmark":108358.59},{"day":"2027-03-07","equity":99453.26,"benchmark":107855.43},{"day":"2027-03-08","equity":99552.34,"benchmark":107553.5},{"day":"2027-03-09","equity":98745.43,"benchmark":108122.54},{"day":"2027-03-10","equity":98432.29,"benchmark":106241.89},{"day":"2027-03-11","equity":99200.56,"benchmark":107184.41},{"day":"2027-03-12","equity":100572.67,"benchmark":106623.14},{"day":"2027-03-13","equity":101216.82,"benchmark":105205.06},{"day":"2027-03-14","equity":100981.65,"benchmark":104422.17},{"day":"2027-03-15","equity":100981.65,"benchmark":105053.9},{"day":"2027-03-16","equity":100981.65,"benchmark":106048.84},{"day":"2027-03-17","equity":100981.65,"benchmark":107490.21},{"day":"2027-03-18","equity":100981.65,"benchmark":108073.92},{"day":"2027-03-19","equity":100981.65,"benchmark":107408.21},{"day":"2027-03-20","equity":100981.65,"benchmark":108121.8},{"day":"2027-03-21","equity":100981.65,"benchmark":108151.7},{"day":"2027-03-22","equity":100981.65,"benchmark":110830.79},{"day":"2027-03-23","equity":100981.65,"benchmark":108690.79},{"day":"2027-03-24","equity":100981.65,"benchmark":110578.75},{"day":"2027-03-25","equity":100981.65,"benchmark":111557.84},{"day":"2027-03-26","equity":100981.65,"benchmark":112140.35},{"day":"2027-03-27","equity":100981.65,"benchmark":112164.51},{"day":"2027-03-28","equity":100981.65,"benchmark":111664.04},{"day":"2027-03-29","equity":100981.65,"benchmark":110719.91},{"day":"2027-03-30","equity":100981.65,"benchmark":109134.77},{"day":"2027-03-31","equity":100981.65,"benchmark":111514.13},{"day":"2027-04-01","equity":100981.65,"benchmark":112698.74},{"day":"2027-04-02","equity":100472.58,"benchmark":113596.75},{"day":"2027-04-03","equity":102347.52,"benchmark":114148.35},{"day":"2027-04-04","equity":104056.42,"benchmark":112117.33},{"day":"2027-04-05","equity":104895.1,"benchmark":111943.64},{"day":"2027-04-06","equity":105211.36,"benchmark":112219.96},{"day":"2027-04-07","equity":105786.26,"benchmark":113670.52},{"day":"2027-04-08","equity":106130.32,"benchmark":112678.42},{"day":"2027-04-09","equity":104556.43,"benchmark":113128.87},{"day":"2027-04-10","equity":103845.48,"benchmark":113003.97},{"day":"2027-04-11","equity":105189.57,"benchmark":113183.16},{"day":"2027-04-12","equity":106382.84,"benchmark":112448.94},{"day":"2027-04-13","equity":106631.49,"benchmark":113003.03},{"day":"2027-04-14","equity":106229.57,"benchmark":113242.78},{"day":"2027-04-15","equity":106229.57,"benchmark":111291.21},{"day":"2027-04-16","equity":106229.57,"benchmark":112799.84},{"day":"2027-04-17","equity":106229.57,"benchmark":115460.25},{"day":"2027-04-18","equity":106229.57,"benchmark":114604.6},{"day":"2027-04-19","equity":106880.69,"benchmark":116087.03},{"day":"2027-04-20","equity":106880.69,"benchmark":115111.84},{"day":"2027-04-21","equity":106880.69,"benchmark":114661.17},{"day":"2027-04-22","equity":106880.69,"benchmark":116858.77},{"day":"2027-04-23","equity":106880.69,"benchmark":117255.52},{"day":"2027-04-24","equity":106880.69,"benchmark":119213.5},{"day":"2027-04-25","equity":106880.69,"benchmark":119731.88},{"day":"2027-04-26","equity":106880.69,"benchmark":121121.36},{"day":"2027-04-27","equity":106880.69,"benchmark":121094.54},{"day":"2027-04-28","equity":106880.69,"benchmark":123021.17},{"day":"2027-04-29","equity":106880.69,"benchmark":125423.36},{"day":"2027-04-30","equity":106880.69,"benchmark":126463.57},{"day":"2027-05-01","equity":106880.69,"benchmark":125936.33},{"day":"2027-05-02","equity":106880.69,"benchmark":125660.68},{"day":"2027-05-03","equity":106880.69,"benchmark":124666.89},{"day":"2027-05-04","equity":106880.69,"benchmark":125613.68},{"day":"2027-05-05","equity":106880.69,"benchmark":126462.49},{"day":"2027-05-06","equity":106880.69,"benchmark":125775.11},{"day":"2027-05-07","equity":106880.69,"benchmark":127130.38},{"day":"2027-05-08","equity":106880.69,"benchmark":126593.9},{"day":"2027-05-09","equity":106880.69,"benchmark":129118.86},{"day":"2027-05-10","equity":106880.69,"benchmark":130392.51},{"day":"2027-05-11","equity":106880.69,"benchmark":132691.15},{"day":"2027-05-12","equity":106880.69,"benchmark":131957.58},{"day":"2027-05-13","equity":106880.69,"benchmark":130857.75},{"day":"2027-05-14","equity":106880.69,"benchmark":128695.57},{"day":"2027-05-15","equity":106880.69,"benchmark":129738.49},{"day":"2027-05-16","equity":106880.69,"benchmark":128495.66},{"day":"2027-05-17","equity":106880.69,"benchmark":130445.36},{"day":"2027-05-18","equity":106880.69,"benchmark":130847.45},{"day":"2027-05-19","equity":106880.69,"benchmark":132067.34},{"day":"2027-05-20","equity":106880.69,"benchmark":130599.59},{"day":"2027-05-21","equity":106880.69,"benchmark":130043.34},{"day":"2027-05-22","equity":106880.69,"benchmark":130499.51},{"day":"2027-05-23","equity":106880.69,"benchmark":131684.41},{"day":"2027-05-24","equity":106880.69,"benchmark":130218.8},{"day":"2027-05-25","equity":106880.69,"benchmark":130885.3},{"day":"2027-05-26","equity":106880.69,"benchmark":130026.47},{"day":"2027-05-27","equity":106880.69,"benchmark":131305.86},{"day":"2027-05-28","equity":106880.69,"benchmark":131228.95},{"day":"2027-05-29","equity":106880.69,"benchmark":131060.71},{"day":"2027-05-30","equity":106880.69,"benchmark":131856.32},{"day":"2027-05-31","equity":106880.69,"benchmark":133614.31},{"day":"2027-06-01","equity":106880.69,"benchmark":133519.13},{"day":"2027-06-02","equity":106880.69,"benchmark":135391.56},{"day":"2027-06-03","equity":106880.69,"benchmark":134277.65},{"day":"2027-06-04","equity":106880.69,"benchmark":134886.74},{"day":"2027-06-05","equity":106880.69,"benchmark":133615.4},{"day":"2027-06-06","equity":106880.69,"benchmark":134127.57},{"day":"2027-06-07","equity":106880.69,"benchmark":133138.13},{"day":"2027-06-08","equity":106880.69,"benchmark":133410.11},{"day":"2027-06-09","equity":106880.69,"benchmark":134468.18},{"day":"2027-06-10","equity":106880.69,"benchmark":133405.02},{"day":"2027-06-11","equity":106880.69,"benchmark":131313.64},{"day":"2027-06-12","equity":106880.69,"benchmark":131305.83},{"day":"2027-06-13","equity":106880.69,"benchmark":132212.97},{"day":"2027-06-14","equity":106880.69,"benchmark":132741.34},{"day":"2027-06-15","equity":106880.69,"benchmark":131765.09},{"day":"2027-06-16","equity":106880.69,"benchmark":133089.24},{"day":"2027-06-17","equity":106880.69,"benchmark":132927.06},{"day":"2027-06-18","equity":107559.79,"benchmark":134168.73},{"day":"2027-06-19","equity":107559.79,"benchmark":133213.73},{"day":"2027-06-20","equity":107559.79,"benchmark":134021.95},{"day":"2027-06-21","equity":106946.72,"benchmark":135826.68},{"day":"2027-06-22","equity":108855.23,"benchmark":135154.94},{"day":"2027-06-23","equity":108669.29,"benchmark":134984.49},{"day":"2027-06-24","equity":108669.29,"benchmark":136044.67},{"day":"2027-06-25","equity":108669.29,"benchmark":136979.4},{"day":"2027-06-26","equity":108669.29,"benchmark":137689.96},{"day":"2027-06-27","equity":108669.29,"benchmark":137745.15},{"day":"2027-06-28","equity":108669.29,"benchmark":135836.56},{"day":"2027-06-29","equity":108669.29,"benchmark":136047.65},{"day":"2027-06-30","equity":108669.29,"benchmark":134524.65},{"day":"2027-07-01","equity":108669.29,"benchmark":134851.43},{"day":"2027-07-02","equity":108621.42,"benchmark":131957.07},{"day":"2027-07-03","equity":108569.38,"benchmark":134068.51},{"day":"2027-07-04","equity":109753.05,"benchmark":136843.97},{"day":"2027-07-05","equity":109780.37,"benchmark":137666.5}],"signal":{"z":-0.3108424203089,"beta":0.9551836135265225,"as_of":"2027-07-05","note":"short spread -> flat","position":"flat","warming_up":false,"observations":550},"positions":{},"trades":[{"ts":"2026-10-10T17:58:33+00:00","symbol":"EWC","side":"sell","qty":4166,"order_id":"sim-549-EWC","status":"filled","fill_price":12.685290335520323},{"ts":"2026-10-10T17:58:33+00:00","symbol":"EWA","side":"buy","qty":3166,"order_id":"sim-549-EWA","status":"filled","fill_price":17.4819902058663},{"ts":"2026-10-10T17:58:33+00:00","symbol":"EWC","side":"buy","qty":35,"order_id":"sim-548-EWC","status":"filled","fill_price":12.867345094463884},{"ts":"2026-10-10T17:58:33+00:00","symbol":"EWA","side":"sell","qty":101,"order_id":"sim-548-EWA","status":"filled","fill_price":17.73017691984783},{"ts":"2026-10-10T17:58:33+00:00","symbol":"EWC","side":"buy","qty":39,"order_id":"sim-547-EWC","status":"filled","fill_price":12.85062552634434},{"ts":"2026-10-10T17:58:33+00:00","symbol":"EWA","side":"sell","qty":16,"order_id":"sim-547-EWA","status":"filled","fill_price":18.093830897712806},{"ts":"2026-10-10T17:58:33+00:00","symbol":"EWC","side":"buy","qty":4092,"order_id":"sim-545-EWC","status":"filled","fill_price":12.972869761326423},{"ts":"2026-10-10T17:58:33+00:00","symbol":"EWA","side":"sell","qty":3049,"order_id":"sim-545-EWA","status":"filled","fill_price":18.22512458499655}],"last_error":null};
+
+  const $ = (id) => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+  let lastGood = null, timer = null;
+
+  const money = (v) => v == null ? "–" : "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const pct = (v, d = 2) => v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v * 100).toFixed(d) + "%";
+  const signed = (v, d) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d);
+  const cls = (v) => v == null || v === 0 ? "" : v > 0 ? "pos" : "neg";
+  const setFig = (id, text, v) => { const el = $(id); el.textContent = text; el.className = cls(v); };
+  const when = (iso) => iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "–";
+  const day = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "–";
+
+  function el(tag, attrs, parent, text) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+
+  function drawChart(data) {
+    const svg = $("kfl-svg");
+    svg.replaceChildren();
+    const pts = data.equity_curve || [];
+    const W = Math.round(Math.max(340, Math.min(800, svg.parentElement.clientWidth - 12)));
+    const H = W < 560 ? 240 : 300, L = 58, R = W < 560 ? 88 : 96, T = 14, B = 30;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    if (pts.length < 2) {
+      el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", fill: "#5B6C84", "font-size": 15 }, svg,
+        pts.length ? "The curve appears after the second reading." : "Waiting for the first equity reading.");
+      return;
+    }
+    const start = data.inception.equity;
+    const vals = pts.flatMap((p) => [p.equity, p.benchmark]).filter((v) => v != null).concat(start);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = (hi - lo) * 0.1 || start * 0.005;
+    lo -= pad; hi += pad;
+    const x = (i) => L + (i / (pts.length - 1)) * (W - L - R);
+    const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+
+    // value gridlines
+    for (let k = 0; k <= 4; k++) {
+      const v = lo + (k / 4) * (hi - lo);
+      el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "#CFDAE5", "stroke-width": 1 }, svg);
+      el("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end", fill: "#5B6C84", "font-size": 11 }, svg,
+        "$" + (v / 1000).toFixed(1) + "k");
+    }
+    // starting capital as a drafting centre line
+    el("line", { x1: L, x2: W - R, y1: y(start), y2: y(start), stroke: "#1C2E4A", "stroke-width": 0.8, "stroke-dasharray": "14 4 2 4" }, svg);
+    el("text", { x: W - R - 4, y: y(start) + 15, "text-anchor": "end", fill: "#5B6C84", "font-size": 11 }, svg, "Starting capital");
+
+    const path = (key) => pts.map((p, i) => p[key] == null ? "" : (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p[key]).toFixed(1)).join(" ");
+    el("path", { d: path("benchmark"), fill: "none", stroke: "#2A7B78", "stroke-width": 1.6, "stroke-dasharray": "6 4" }, svg);
+    el("path", { d: path("equity"), fill: "none", stroke: "#1C2E4A", "stroke-width": 2.2, "stroke-linejoin": "round" }, svg);
+
+    // dimension line: start level to current equity
+    const last = pts[pts.length - 1].equity, dx = W - R + (W < 560 ? 22 : 34), y0 = y(start), y1 = y(last);
+    const ochre = "#B8862B";
+    el("line", { x1: W - R + 4, x2: dx + 8, y1: y0, y2: y0, stroke: ochre, "stroke-width": 1 }, svg);
+    el("line", { x1: x(pts.length - 1) + 4, x2: dx + 8, y1: y1, y2: y1, stroke: ochre, "stroke-width": 1 }, svg);
+    if (Math.abs(y1 - y0) > 10) {
+      el("line", { x1: dx, x2: dx, y1: y0, y2: y1, stroke: ochre, "stroke-width": 1.5 }, svg);
+      const dir = y1 < y0 ? 1 : -1;
+      el("path", { d: `M${dx} ${y1} l-4 ${6 * dir} h8 z`, fill: ochre }, svg);
+      el("path", { d: `M${dx} ${y0} l-4 ${-6 * dir} h8 z`, fill: ochre }, svg);
+    }
+    el("text", { x: dx + 12, y: (y0 + y1) / 2 + 5, fill: ochre, "font-size": 15, "font-weight": 600,
+      "font-family": "Barlow Condensed, Arial Narrow, sans-serif" }, svg, pct(last / start - 1));
+
+    el("text", { x: L, y: H - 8, fill: "#5B6C84", "font-size": 11 }, svg, day(pts[0].day));
+    el("text", { x: W - R, y: H - 8, fill: "#5B6C84", "font-size": 11, "text-anchor": "end" }, svg, day(pts[pts.length - 1].day));
+    svg.setAttribute("aria-label", `Equity moved from ${money(start)} to ${money(last)} over ${pts.length} readings.`);
+  }
+
+  function drawGauge(data) {
+    const g = $("kfl-gauge");
+    g.replaceChildren();
+    const s = data.strategy, z = data.signal.z, lim = s.stop_z;
+    const L = 16, R = 344, mid = 38;
+    const x = (v) => L + ((Math.max(-lim, Math.min(lim, v)) + lim) / (2 * lim)) * (R - L);
+    el("rect", { x: L, y: mid - 6, width: x(-s.entry_z) - L, height: 12, fill: "rgba(42,123,120,.14)" }, g);
+    el("rect", { x: x(s.entry_z), y: mid - 6, width: R - x(s.entry_z), height: 12, fill: "rgba(42,123,120,.14)" }, g);
+    el("line", { x1: L, x2: R, y1: mid, y2: mid, stroke: "#1C2E4A", "stroke-width": 1.2 }, g);
+    const ticks = [[-lim, "Stop"], [-s.entry_z, "Enter"], [-s.exit_z, "Exit"], [s.exit_z, "Exit"], [s.entry_z, "Enter"], [lim, "Stop"]];
+    ticks.forEach(([v, name]) => {
+      el("line", { x1: x(v), x2: x(v), y1: mid - 9, y2: mid + 9, stroke: "#1C2E4A", "stroke-width": 1 }, g);
+      el("text", { x: x(v), y: mid - 13, "text-anchor": "middle", fill: "#5B6C84", "font-size": 11 }, g, signed(v, 1));
+      el("text", { x: x(v), y: mid - 27, "text-anchor": "middle", fill: "#5B6C84", "font-size": 10 }, g, name);
+    });
+    if (z != null) {
+      el("path", { d: `M${x(z)} ${mid + 3} l-6 12 h12 z`, fill: "#B8862B" }, g);
+      el("text", { x: x(z), y: mid + 34, "text-anchor": "middle", fill: "#1C2E4A", "font-size": 13, "font-weight": 600 }, g, "z = " + signed(z, 2));
+      g.setAttribute("aria-label", `Spread z-score ${z.toFixed(2)}. Entry at ±${s.entry_z}, exit inside ±${s.exit_z}, stop at ±${lim}.`);
+    }
+  }
+
+  function render(data) {
+    lastData = data;
+    const s = data.strategy, m = data.metrics, sig = data.signal;
+    $("kfl-lede").textContent = `A Kalman filter re-estimates the hedge ratio between ${s.y} and ${s.x} every trading day. When the spread moves more than ${s.entry_z} standard deviations from its ${s.zscore_window}-day average, the strategy bets on it reverting.`;
+    $("kfl-bench-label").textContent = s.benchmark;
+    $("f-bench-label").textContent = s.benchmark + " buy and hold";
+
+    const banner = $("kfl-banner");
+    banner.hidden = data.mode !== "simulation";
+    banner.textContent = "Simulated market data for development. These are not live results.";
+
+    setFig("f-equity", money(m.equity), null);
+    setFig("f-return", pct(m.total_return), m.total_return);
+    setFig("f-bench", pct(m.benchmark_return), m.benchmark_return);
+    setFig("f-excess", pct(m.excess_return), m.excess_return);
+    setFig("f-dd", pct(m.max_drawdown), m.max_drawdown ? -1 : null);
+    const sh = $("f-sharpe");
+    sh.className = "";
+    sh.innerHTML = "";
+    sh.append(m.sharpe == null ? "–" : m.sharpe.toFixed(2));
+    if (m.sharpe_note) { const small = document.createElement("small"); small.textContent = m.sharpe_note; sh.append(small); }
+
+    drawChart(data);
+    drawGauge(data);
+
+    const pos = $("kfl-pos");
+    pos.replaceChildren();
+    const legs = Object.entries(data.positions || {}).filter(([, p]) => p.qty);
+    const strong = document.createElement("strong");
+    strong.textContent = sig.position.charAt(0).toUpperCase() + sig.position.slice(1);
+    pos.append(strong, legs.length ? ": " + legs.map(([sym, p]) => `${p.qty > 0 ? "long" : "short"} ${Math.abs(p.qty).toLocaleString()} ${sym}`).join(", ") : ", no open positions");
+    const bits = [];
+    if (sig.beta != null) bits.push(`Hedge ratio ${sig.beta.toFixed(3)}, so $${sig.beta.toFixed(2)} of ${s.x} against each $1 of ${s.y}`);
+    if (sig.as_of) bits.push(`measured ${day(sig.as_of)}`);
+    if (sig.warming_up) bits.push(`filter still warming up (${sig.observations} observations)`);
+    $("kfl-signal-note").textContent = bits.length ? bits.join(", ") + "." : "The first signal is taken shortly before the close.";
+
+    const wrap = $("kfl-trades");
+    if (!data.trades.length) {
+      wrap.innerHTML = '<p class="kfl-empty">No orders yet. The strategy trades only when the spread crosses an entry or exit level.</p>';
+    } else {
+      const rows = data.trades.map((t) => `<tr><td>${when(t.ts)}</td><td>${t.side === "buy" ? "Buy" : "Sell"}</td><td>${t.symbol}</td><td class="num">${t.qty.toLocaleString()}</td><td class="num">${t.fill_price == null ? "pending" : "$" + t.fill_price.toFixed(2)}</td></tr>`).join("");
+      wrap.innerHTML = `<table><thead><tr><th>Time</th><th>Side</th><th>Symbol</th><th class="num">Shares</th><th class="num">Fill</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    const tb = [
+      ["Strategy", s.name], ["Pair", `${s.y} / ${s.x}`], ["Started", data.inception ? when(data.inception.ts) : "–"],
+      ["Starting capital", data.inception ? money(data.inception.equity) : "–"], ["Days live", m.days_live],
+      ["Orders placed", m.n_trades], ["Broker", data.mode === "paper" ? "Alpaca paper" : "Offline simulator"],
+    ];
+    $("kfl-titleblock").innerHTML = tb.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  }
+
+  function setStatus(kind, text) {
+    $("kfl-dot").className = "kfl-dot" + (kind === "live" ? " is-live" : kind === "error" ? " is-error" : "");
+    $("kfl-status").textContent = text;
+  }
+
+  async function load() {
+    if (DEMO) { render(SAMPLE); setStatus("idle", "Preview with simulated data"); return; }
+    try {
+      const res = await fetch(API_BASE.replace(/\/$/, "") + "/api/snapshot", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      lastGood = new Date();
+      render(data);
+      if (data.last_error && (!data.updated_at || data.last_error.ts > data.updated_at)) {
+        setStatus("error", "The service reported an error on its last run. Check its logs.");
+      } else if (data.market_open) {
+        setStatus("live", "Market open. Updated " + when(data.updated_at));
+      } else {
+        setStatus("idle", "Market closed. Last update " + when(data.updated_at));
+      }
+    } catch (e) {
+      setStatus("error", lastGood
+        ? "Can't reach the trading service. Showing data loaded at " + lastGood.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) + "."
+        : "Can't reach the trading service. Check that API_BASE points to the deployed backend.");
+    }
+  }
+
+  let resizeTimer = null, lastData = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (lastData) drawChart(lastData); }, 150);
+  });
+
+  function start() { load(); clearInterval(timer); if (!DEMO) timer = setInterval(load, POLL_MS); }
+  document.addEventListener("visibilitychange", () => { if (document.hidden) clearInterval(timer); else start(); });
+  start();
+})();
+</script>
+</body>
+</html>
